@@ -647,12 +647,17 @@
   If a tap puts to a closed channel, it will be removed from the mult."
   [ch]
   (let [cs (atom {}) ;;ch->close?
+        ch-closed? (atom false)
         m (reify
            Mux
            (muxch* [_] ch)
 
            Mult
-           (tap* [_ ch close?] (swap! cs assoc ch close?) nil)
+           (tap* [_ ch close?]
+             (swap! cs assoc ch close?)
+             (when (and close? @ch-closed?)
+               (close! ch))
+             nil)
            (untap* [_ ch] (swap! cs dissoc ch) nil)
            (untap-all* [_] (reset! cs {}) nil))
         dchan (chan 1)
@@ -662,8 +667,10 @@
     (go-loop []
      (let [val (<! ch)]
        (if (nil? val)
-         (doseq [[c close?] @cs]
-           (when close? (close! c)))
+         (do
+           (reset! ch-closed? true)
+           (doseq [[c close?] @cs]
+             (when close? (close! c))))
          (let [chs (keys @cs)]
            (reset! dctr (count chs))
            (doseq [c chs]
@@ -680,7 +687,8 @@
   "Copies the mult source onto the supplied channel.
 
   By default the channel will be closed when the source closes,
-  but can be determined by the close? parameter."
+  but can be determined by the close? parameter. If the source
+  channel is closed, the given channel will be closed."
   ([mult ch] (tap mult ch true))
   ([mult ch close?] (tap* mult ch close?) ch))
 

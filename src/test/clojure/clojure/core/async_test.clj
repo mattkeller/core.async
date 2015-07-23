@@ -243,6 +243,13 @@
       (is (= [0 1 2 3]
              (<!! (a/into [] b))))))
 
+  (testing "tap to closed channel"
+    (let [a (chan)
+          src (chan)
+          m (mult src)]
+      (close! src)
+      (tap m a)
+      (is (nil? (<!! a)))))
 
   (testing "mix"
     (let [out (chan)
